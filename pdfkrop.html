@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF 裁剪与拆分工具</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        #pdf-wrapper {
+            position: relative;
+            display: inline-block;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            background: white;
+            user-select: none;
+        }
+
+        #crop-box {
+            position: absolute;
+            border: 2px solid #3b82f6; 
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.4); 
+            cursor: move;
+            z-index: 10;
+        }
+
+        .split-line {
+            position: absolute;
+            z-index: 30;
+        }
+        
+        .split-line::after {
+            content: '';
+            position: absolute;
+            background: #ef4444;
+            box-shadow: 0 0 4px rgba(239, 68, 68, 0.5);
+        }
+
+        /* 垂直拆分线 (切开左右) */
+        .split-h-line { cursor: col-resize; width: 14px; margin-left: -7px; height: 100%; }
+        .split-h-line::after { width: 2px; height: 100%; left: 6px; border-left: 2px dashed #ef4444; }
+
+        /* 水平拆分线 (切开上下) */
+        .split-v-line { cursor: row-resize; height: 14px; margin-top: -7px; width: 100%; }
+        .split-v-line::after { height: 2px; width: 100%; top: 6px; border-top: 2px dashed #ef4444; }
+
+        .crop-handle {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background-color: white;
+            border: 2px solid #3b82f6;
+            border-radius: 50%;
+            z-index: 20;
+        }
+
+        .handle-nw { top: -6px; left: -6px; cursor: nwse-resize; }
+        .handle-n { top: -6px; left: calc(50% - 6px); cursor: ns-resize; }
+        .handle-ne { top: -6px; right: -6px; cursor: nesw-resize; }
+        .handle-e { top: calc(50% - 6px); right: -6px; cursor: ew-resize; }
+        .handle-se { bottom: -6px; right: -6px; cursor: nwse-resize; }
+        .handle-s { bottom: -6px; left: calc(50% - 6px); cursor: ns-resize; }
+        .handle-sw { bottom: -6px; left: -6px; cursor: nesw-resize; }
+        .handle-w { top: calc(50% - 6px); left: -6px; cursor: ew-resize; }
+
+        .tab-active { border-bottom: 2px solid #3b82f6; color: #3b82f6; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 h-screen flex overflow-hidden font-sans">
+
+    <!-- 左侧控制面板 -->
+    <aside class="w-80 bg-white border-r border-slate-200 flex flex-col h-full z-20 shadow-sm shrink-0">
+        <div class="p-5 border-b border-slate-100 flex items-center gap-2">
+            <i data-lucide="scissors" class="text-blue-600 w-6 h-6"></i>
+            <h1 class="text-xl font-bold text-slate-900">PDF 裁剪与拆分工具</h1>
+        </div>
+
+        <!-- 标签页切换 -->
+        <div class="flex border-b border-slate-100 text-sm font-medium">
+            <button id="tab-crop" class="flex-1 py-3 text-slate-500 tab-active">裁剪设置</button>
+            <button id="tab-split" class="flex-1 py-3 text-slate-500">拆分设置</button>
+        </div>
+
+        <div class="flex-1 overflow-y-auto p-5 flex flex-col gap-6 no-scrollbar">
+            <!-- 导入 -->
+            <div class="flex flex-col gap-2">
+                <input type="file" id="file-input" accept="application/pdf" class="hidden">
+                <button onclick="document.getElementById('file-input').click()" class="w-full flex items-center justify-center gap-2 bg-slate-900 text-white hover:bg-slate-800 transition-all py-3 rounded-xl font-medium shadow-md">
+                    <i data-lucide="file-up" class="w-4 h-4"></i>
+                    导入 PDF
+                </button>
+                <p id="file-name" class="text-[10px] text-slate-400 truncate hidden px-2 text-center"></p>
+            </div>
+
+            <!-- 裁剪面板内容 -->
+            <div id="pane-crop" class="flex flex-col gap-6">
+                <div class="flex items-center justify-between">
+                    <label class="text-xs font-bold text-slate-500 uppercase tracking-wider">裁剪边距 (%)</label>
+                    <button id="btn-reset-crop" class="text-[10px] text-blue-500 font-bold hover:underline">重置</button>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="space-y-1">
+                        <span class="text-[10px] text-slate-400 font-bold ml-1">TOP</span>
+                        <input type="number" id="input-top" step="0.5" value="0" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm">
+                    </div>
+                    <div class="space-y-1">
+                        <span class="text-[10px] text-slate-400 font-bold ml-1">BOTTOM</span>
+                        <input type="number" id="input-bottom" step="0.5" value="0" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm">
+                    </div>
+                    <div class="space-y-1">
+                        <span class="text-[10px] text-slate-400 font-bold ml-1">LEFT</span>
+                        <input type="number" id="input-left" step="0.5" value="0" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm">
+                    </div>
+                    <div class="space-y-1">
+                        <span class="text-[10px] text-slate-400 font-bold ml-1">RIGHT</span>
+                        <input type="number" id="input-right" step="0.5" value="0" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm">
+                    </div>
+                </div>
+            </div>
+
+            <!-- 拆分面板内容 -->
+            <div id="pane-split" class="hidden flex flex-col gap-4">
+                <label class="text-xs font-bold text-slate-500 uppercase tracking-wider">多重拆分线</label>
+                <div class="flex flex-col gap-2">
+                    <button id="add-split-h" class="w-full py-2 px-3 border border-blue-100 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold flex items-center justify-center gap-2 hover:bg-blue-100">
+                        <i data-lucide="plus" class="w-3 h-3"></i> 添加纵向拆分 (左右分)
+                    </button>
+                    <button id="add-split-v" class="w-full py-2 px-3 border border-orange-100 bg-orange-50 text-orange-600 rounded-lg text-xs font-bold flex items-center justify-center gap-2 hover:bg-orange-100">
+                        <i data-lucide="plus" class="w-3 h-3"></i> 添加横向拆分 (上下分)
+                    </button>
+                </div>
+                <div id="split-list" class="flex flex-col gap-2 max-h-48 overflow-y-auto pr-1">
+                    <!-- 动态列表 -->
+                </div>
+                <p class="text-[10px] text-slate-400 italic">提示：在预览图上直接拖动拆分线。导出时会按顺序生成页面。</p>
+            </div>
+
+            <!-- 页面应用范围 -->
+            <div id="scope-controls" class="hidden flex flex-col gap-2 pt-4 border-t border-slate-100">
+                <label class="text-xs font-bold text-slate-500 uppercase tracking-wider">应用范围</label>
+                <div class="flex bg-slate-100 p-1 rounded-xl">
+                    <button id="mode-all" class="flex-1 py-2 text-xs font-bold rounded-lg bg-white shadow-sm transition-all text-blue-600">全部页面</button>
+                    <button id="mode-single" class="flex-1 py-2 text-xs font-bold rounded-lg hover:bg-white/50 transition-all text-slate-500">当前页</button>
+                </div>
+            </div>
+
+            <!-- 预览导航 -->
+            <div id="nav-controls" class="hidden flex flex-col gap-2 pt-2 border-t border-slate-100">
+                <div class="flex items-center justify-between bg-slate-50 rounded-xl border border-slate-200 p-1">
+                    <button id="btn-prev" class="p-2 rounded-lg hover:bg-white disabled:opacity-30"><i data-lucide="chevron-left" class="w-4 h-4"></i></button>
+                    <span class="text-xs font-bold text-slate-600"><span id="page-num">0</span> / <span id="page-count">0</span></span>
+                    <button id="btn-next" class="p-2 rounded-lg hover:bg-white disabled:opacity-30"><i data-lucide="chevron-right" class="w-4 h-4"></i></button>
+                </div>
+            </div>
+        </div>
+
+        <div class="p-5 border-t border-slate-100">
+            <button id="btn-export" disabled class="w-full flex items-center justify-center gap-2 bg-blue-600 text-white hover:bg-blue-700 disabled:bg-slate-200 disabled:text-slate-400 transition-all py-4 rounded-xl font-bold shadow-lg shadow-blue-200">
+                <i data-lucide="download" class="w-4 h-4"></i>
+                导出处理后的 PDF
+            </button>
+        </div>
+    </aside>
+
+    <!-- 预览区 -->
+    <main class="flex-1 bg-slate-200 flex flex-col relative overflow-hidden">
+        <div id="empty-state" class="absolute inset-0 flex flex-col items-center justify-center text-slate-400">
+            <i data-lucide="pdf" class="w-12 h-12 mb-3 opacity-20"></i>
+            <p class="text-sm">导入 PDF 开始编辑</p>
+        </div>
+
+        <div id="preview-container" class="flex-1 overflow-auto p-12 flex justify-center items-start hidden no-scrollbar">
+            <div id="pdf-wrapper">
+                <canvas id="pdf-canvas"></canvas>
+                <div id="split-layer" class="absolute inset-0 pointer-events-none">
+                    <!-- 动态拆分线将显示在这里 -->
+                </div>
+                <div id="crop-box">
+                    <div class="crop-handle handle-nw" data-drag="nw"></div>
+                    <div class="crop-handle handle-n" data-drag="n"></div>
+                    <div class="crop-handle handle-ne" data-drag="ne"></div>
+                    <div class="crop-handle handle-e" data-drag="e"></div>
+                    <div class="crop-handle handle-se" data-drag="se"></div>
+                    <div class="crop-handle handle-s" data-drag="s"></div>
+                    <div class="crop-handle handle-sw" data-drag="sw"></div>
+                    <div class="crop-handle handle-w" data-drag="w"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="loading-overlay" class="absolute inset-0 bg-white/80 backdrop-blur-sm flex items-center justify-center hidden z-50">
+            <div class="flex flex-col items-center gap-3">
+                <div class="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                <span class="text-xs font-bold text-slate-500" id="loading-text">处理中...</span>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        lucide.createIcons();
+
+        // 核心状态
+        const State = {
+            pdfDoc: null,
+            pdfBytes: null,
+            originalFileName: '',
+            pageNum: 1,
+            pageCount: 0,
+            activeTab: 'crop', // 'crop' | 'split'
+            mode: 'all', // 'all' | 'single'
+            
+            // 基础裁剪设置 (t, r, b, l)
+            globalCrop: { t: 0, r: 0, b: 0, l: 0 },
+            // 拆分线设置 (hLines, vLines)
+            globalSplits: { h: [], v: [] }, // h 是纵向线(控制x), v 是横向线(控制y)
+
+            singleSettings: {}, // pageNum -> { crop, splits }
+
+            getCur() {
+                if (this.mode === 'all') return { crop: this.globalCrop, splits: this.globalSplits };
+                if (!this.singleSettings[this.pageNum]) {
+                    this.singleSettings[this.pageNum] = { 
+                        crop: JSON.parse(JSON.stringify(this.globalCrop)),
+                        splits: JSON.parse(JSON.stringify(this.globalSplits))
+                    };
+                }
+                return this.singleSettings[this.pageNum];
+            }
+        };
+
+        const UI = {
+            tabs: { crop: document.getElementById('tab-crop'), split: document.getElementById('tab-split') },
+            panes: { crop: document.getElementById('pane-crop'), split: document.getElementById('pane-split') },
+            wrapper: document.getElementById('pdf-wrapper'),
+            canvas: document.getElementById('pdf-canvas'),
+            cropBox: document.getElementById('crop-box'),
+            splitLayer: document.getElementById('split-layer'),
+            splitList: document.getElementById('split-list'),
+            loadingOverlay: document.getElementById('loading-overlay'),
+            loadingText: document.getElementById('loading-text')
+        };
+
+        const ctx = UI.canvas.getContext('2d');
+
+        // 标签页切换
+        Object.keys(UI.tabs).forEach(key => {
+            UI.tabs[key].onclick = () => {
+                State.activeTab = key;
+                Object.values(UI.tabs).forEach(t => t.classList.remove('tab-active'));
+                UI.tabs[key].classList.add('tab-active');
+                Object.values(UI.panes).forEach(p => p.classList.add('hidden'));
+                UI.panes[key].classList.remove('hidden');
+                updateUI();
+            };
+        });
+
+        // 加载 PDF
+        document.getElementById('file-input').onchange = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            UI.loadingOverlay.classList.remove('hidden');
+            try {
+                State.originalFileName = file.name;
+                document.getElementById('file-name').textContent = file.name;
+                document.getElementById('file-name').classList.remove('hidden');
+                const buffer = await file.arrayBuffer();
+                State.pdfBytes = new Uint8Array(buffer);
+                State.pdfDoc = await pdfjsLib.getDocument({ data: State.pdfBytes.slice() }).promise;
+                State.pageCount = State.pdfDoc.numPages;
+                State.pageNum = 1;
+
+                document.getElementById('page-count').textContent = State.pageCount;
+                document.getElementById('empty-state').classList.add('hidden');
+                document.getElementById('preview-container').classList.remove('hidden');
+                document.getElementById('scope-controls').classList.remove('hidden');
+                document.getElementById('nav-controls').classList.remove('hidden');
+                document.getElementById('btn-export').disabled = false;
+                
+                await render();
+            } finally {
+                UI.loadingOverlay.classList.add('hidden');
+            }
+        };
+
+        async function render() {
+            const page = await State.pdfDoc.getPage(State.pageNum);
+            const viewport = page.getViewport({ scale: 2.0 });
+            UI.canvas.width = viewport.width;
+            UI.canvas.height = viewport.height;
+            const containerW = document.getElementById('preview-container').clientWidth - 100;
+            const ratio = containerW / viewport.width;
+            UI.canvas.style.width = `${viewport.width * ratio}px`;
+            UI.canvas.style.height = `${viewport.height * ratio}px`;
+            UI.wrapper.style.width = UI.canvas.style.width;
+            UI.wrapper.style.height = UI.canvas.style.height;
+            await page.render({ canvasContext: ctx, viewport }).promise;
+            document.getElementById('page-num').textContent = State.pageNum;
+            updateUI();
+        }
+
+        function updateUI() {
+            const { crop, splits } = State.getCur();
+            
+            // 裁剪框
+            UI.cropBox.style.top = `${crop.t}%`;
+            UI.cropBox.style.right = `${crop.r}%`;
+            UI.cropBox.style.bottom = `${crop.b}%`;
+            UI.cropBox.style.left = `${crop.l}%`;
+            UI.cropBox.style.pointerEvents = State.activeTab === 'crop' ? 'auto' : 'none';
+
+            // 数值输入
+            document.getElementById('input-top').value = crop.t;
+            document.getElementById('input-bottom').value = crop.b;
+            document.getElementById('input-left').value = crop.l;
+            document.getElementById('input-right').value = crop.r;
+
+            // 拆分线渲染
+            UI.splitLayer.innerHTML = '';
+            UI.splitList.innerHTML = '';
+            
+            const renderLines = (lines, type) => {
+                lines.forEach((pos, idx) => {
+                    // 线条
+                    const el = document.createElement('div');
+                    el.className = `split-line ${type === 'h' ? 'split-h-line' : 'split-v-line'} pointer-events-auto`;
+                    el.dataset.type = type;
+                    el.dataset.index = idx;
+                    if (type === 'h') {
+                        el.style.left = `${pos}%`;
+                        el.style.top = `${crop.t}%`;
+                        el.style.bottom = `${crop.b}%`;
+                    } else {
+                        el.style.top = `${pos}%`;
+                        el.style.left = `${crop.l}%`;
+                        el.style.right = `${crop.r}%`;
+                    }
+                    UI.splitLayer.appendChild(el);
+
+                    // 侧边栏列表项
+                    const li = document.createElement('div');
+                    li.className = `flex items-center justify-between p-2 rounded text-[10px] ${type==='h' ? 'bg-blue-50 text-blue-700':'bg-orange-50 text-orange-700'}`;
+                    li.innerHTML = `
+                        <span class="font-bold">${type==='h'?'纵向':'横向'} #${idx+1} (${pos.toFixed(1)}%)</span>
+                        <button onclick="removeSplit('${type}', ${idx})" class="hover:text-red-500"><i data-lucide="trash-2" style="width:12px; height:12px"></i></button>
+                    `;
+                    UI.splitList.appendChild(li);
+                });
+            };
+
+            renderLines(splits.h, 'h');
+            renderLines(splits.v, 'v');
+            lucide.createIcons();
+        }
+
+        // 添加/删除拆分线
+        document.getElementById('add-split-h').onclick = () => {
+            const { crop, splits } = State.getCur();
+            splits.h.push((crop.l + (100 - crop.l - crop.r) / 2));
+            updateUI();
+        };
+        document.getElementById('add-split-v').onclick = () => {
+            const { crop, splits } = State.getCur();
+            splits.v.push((crop.t + (100 - crop.t - crop.b) / 2));
+            updateUI();
+        };
+        window.removeSplit = (type, idx) => {
+            const { splits } = State.getCur();
+            splits[type].splice(idx, 1);
+            updateUI();
+        };
+
+        // 交互逻辑：拖拽
+        let drag = null;
+        UI.wrapper.onmousedown = (e) => {
+            const target = e.target;
+            const handle = target.dataset.drag || (target === UI.cropBox ? 'move' : null) || (target.classList.contains('split-line') ? 'split' : null);
+            if (!handle) return;
+            e.preventDefault();
+            const rect = UI.wrapper.getBoundingClientRect();
+            drag = { 
+                handle, 
+                type: target.dataset.type, 
+                index: parseInt(target.dataset.index),
+                startX: e.clientX, 
+                startY: e.clientY, 
+                startCfg: JSON.parse(JSON.stringify(State.getCur())), 
+                rect 
+            };
+
+            document.onmousemove = (me) => {
+                if (!drag) return;
+                const dx = (me.clientX - drag.startX) / drag.rect.width * 100;
+                const dy = (me.clientY - drag.startY) / drag.rect.height * 100;
+                const cur = State.getCur();
+
+                if (drag.handle === 'move') {
+                    cur.crop.t = drag.startCfg.crop.t + dy;
+                    cur.crop.b = drag.startCfg.crop.b - dy;
+                    cur.crop.l = drag.startCfg.crop.l + dx;
+                    cur.crop.r = drag.startCfg.crop.r - dx;
+                } else if (drag.handle === 'split') {
+                    if (drag.type === 'h') {
+                        cur.splits.h[drag.index] = Math.max(cur.crop.l + 0.5, Math.min(drag.startCfg.splits.h[drag.index] + dx, 100 - cur.crop.r - 0.5));
+                    } else {
+                        cur.splits.v[drag.index] = Math.max(cur.crop.t + 0.5, Math.min(drag.startCfg.splits.v[drag.index] + dy, 100 - cur.crop.b - 0.5));
+                    }
+                } else {
+                    if (drag.handle.includes('n')) cur.crop.t = drag.startCfg.crop.t + dy;
+                    if (drag.handle.includes('s')) cur.crop.b = drag.startCfg.crop.b - dy;
+                    if (drag.handle.includes('w')) cur.crop.l = drag.startCfg.crop.l + dx;
+                    if (drag.handle.includes('e')) cur.crop.r = drag.startCfg.crop.r - dx;
+                }
+
+                // 统一边界约束
+                cur.crop.t = Math.max(0, Math.min(cur.crop.t, 100 - cur.crop.b - 2));
+                cur.crop.b = Math.max(0, Math.min(cur.crop.b, 100 - cur.crop.t - 2));
+                cur.crop.l = Math.max(0, Math.min(cur.crop.l, 100 - cur.crop.r - 2));
+                cur.crop.r = Math.max(0, Math.min(cur.crop.r, 100 - cur.crop.l - 2));
+
+                updateUI();
+            };
+            document.onmouseup = () => { drag = null; document.onmousemove = null; };
+        };
+
+        // 导航切换
+        document.getElementById('btn-prev').onclick = () => { if(State.pageNum > 1) { State.pageNum--; render(); }};
+        document.getElementById('btn-next').onclick = () => { if(State.pageNum < State.pageCount) { State.pageNum++; render(); }};
+
+        // 数值变更同步
+        ['top','bottom','left','right'].forEach(id => {
+            document.getElementById(`input-${id}`).oninput = (e) => {
+                const cur = State.getCur();
+                cur.crop[id.charAt(0)] = parseFloat(e.target.value) || 0;
+                updateUI();
+            };
+        });
+
+        // 导出
+        document.getElementById('btn-export').onclick = async () => {
+            UI.loadingOverlay.classList.remove('hidden');
+            UI.loadingText.textContent = "计算切片并合并 PDF...";
+            try {
+                const srcDoc = await PDFLib.PDFDocument.load(State.pdfBytes);
+                const outDoc = await PDFLib.PDFDocument.create();
+
+                for (let i = 0; i < srcDoc.getPageCount(); i++) {
+                    const pageNum = i + 1;
+                    const { crop, splits } = State.mode === 'all' ? 
+                        { crop: State.globalCrop, splits: State.globalSplits } : 
+                        (State.singleSettings[pageNum] || { crop: State.globalCrop, splits: State.globalSplits });
+
+                    // 准备边界点并排序
+                    const xPoints = [crop.l, ...splits.h, 100 - crop.r].sort((a,b) => a-b);
+                    const yPoints = [crop.t, ...splits.v, 100 - crop.b].sort((a,b) => a-b);
+
+                    // 循环生成子页面 (Y轴作为外层，实现从上到下、从左到右)
+                    for (let row = 0; row < yPoints.length - 1; row++) {
+                        for (let col = 0; col < xPoints.length - 1; col++) {
+                            const [p] = await outDoc.copyPages(srcDoc, [i]);
+                            const left = xPoints[col];
+                            const right = 100 - xPoints[col+1];
+                            const top = yPoints[row];
+                            const bottom = 100 - yPoints[row+1];
+                            
+                            const { width, height } = p.getSize();
+                            p.setCropBox(
+                                (left/100) * width,
+                                (bottom/100) * height,
+                                Math.max(1, width * (1 - (left + right) / 100)),
+                                Math.max(1, height * (1 - (top + bottom) / 100))
+                            );
+                            outDoc.addPage(p);
+                        }
+                    }
+                }
+
+                const bytes = await outDoc.save();
+                const blob = new Blob([bytes], { type: 'application/pdf' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = `Advanced_Split_${State.originalFileName}`;
+                a.click();
+            } finally {
+                UI.loadingOverlay.classList.add('hidden');
+            }
+        };
+
+        // 切换范围模式
+        document.getElementById('mode-all').onclick = () => {
+            State.mode = 'all';
+            document.getElementById('mode-all').className = "flex-1 py-2 text-xs font-bold rounded-lg bg-white shadow-sm transition-all text-blue-600";
+            document.getElementById('mode-single').className = "flex-1 py-2 text-xs font-bold rounded-lg hover:bg-white/50 transition-all text-slate-500";
+            updateUI();
+        };
+        document.getElementById('mode-single').onclick = () => {
+            State.mode = 'single';
+            document.getElementById('mode-single').className = "flex-1 py-2 text-xs font-bold rounded-lg bg-white shadow-sm transition-all text-blue-600";
+            document.getElementById('mode-all').className = "flex-1 py-2 text-xs font-bold rounded-lg hover:bg-white/50 transition-all text-slate-500";
+            updateUI();
+        };
+        document.getElementById('btn-reset-crop').onclick = () => {
+            const cur = State.getCur();
+            cur.crop = { t: 0, r: 0, b: 0, l: 0 };
+            updateUI();
+        };
+
+    </script>
+</body>
+</html>
