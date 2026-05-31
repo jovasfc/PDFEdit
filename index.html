@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF 工具集</title>
+    <style>
+        :root {
+            --bg: #f5f0eb;
+            --panel-bg: #ffffff;
+            --text: #2c2416;
+            --text-secondary: #6b5e4a;
+            --border: #e0d5c5;
+            --accent: #8b6f4e;
+            --accent-hover: #6b5338;
+            --card-shadow: 0 4px 20px rgba(60, 40, 20, 0.1);
+            --radius: 16px;
+            --radius-sm: 12px;
+            --font: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', sans-serif;
+            --transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: var(--font);
+            background: var(--bg);
+            background-image:
+                radial-gradient(ellipse at 20% 20%, rgba(180, 150, 120, 0.08) 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 70%, rgba(160, 130, 100, 0.06) 0%, transparent 60%),
+                radial-gradient(ellipse at 50% 50%, rgba(200, 170, 140, 0.04) 0%, transparent 80%);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 40px 20px;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 900px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 50px;
+        }
+
+        .header h1 {
+            font-size: 3rem;
+            font-weight: 700;
+            letter-spacing: -0.03em;
+            color: #3d2e1c;
+            display: inline-flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .header h1 .icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, #c4a87c, #8b6f4e);
+            border-radius: 16px;
+            font-size: 2rem;
+            color: #fff;
+            box-shadow: 0 6px 20px rgba(139, 111, 78, 0.35);
+        }
+
+        .header .subtitle {
+            font-size: 1.1rem;
+            color: var(--text-secondary);
+            letter-spacing: 0.02em;
+            line-height: 1.6;
+        }
+
+        .tools-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 25px;
+            margin-bottom: 40px;
+        }
+
+        .tool-card {
+            background: var(--panel-bg);
+            border-radius: var(--radius);
+            padding: 30px 25px;
+            box-shadow: var(--card-shadow);
+            transition: var(--transition);
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid rgba(224, 213, 197, 0.3);
+        }
+
+        .tool-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--accent), #c4a87c);
+            opacity: 0;
+            transition: var(--transition);
+        }
+
+        .tool-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 30px rgba(60, 40, 20, 0.15);
+            border-color: var(--accent);
+        }
+
+        .tool-card:hover::before {
+            opacity: 1;
+        }
+
+        .tool-card .icon-wrapper {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, #f8f3ea, #f0e8d5);
+            border-radius: var(--radius-sm);
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+            transition: var(--transition);
+        }
+
+        .tool-card:hover .icon-wrapper {
+            background: linear-gradient(135deg, var(--accent), #c4a87c);
+            transform: scale(1.1);
+        }
+
+        .tool-card h3 {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: #3d2e1c;
+            margin-bottom: 10px;
+            letter-spacing: -0.01em;
+        }
+
+        .tool-card .description {
+            font-size: 0.95rem;
+            color: var(--text-secondary);
+            line-height: 1.5;
+            margin-bottom: 15px;
+        }
+
+        .tool-card .features {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 15px;
+        }
+
+        .tool-card .feature-tag {
+            display: inline-flex;
+            align-items: center;
+            padding: 5px 12px;
+            background: #f8f3ea;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            transition: var(--transition);
+        }
+
+        .tool-card:hover .feature-tag {
+            background: #f0e8d5;
+            color: var(--accent);
+        }
+
+        .tool-card .arrow {
+            position: absolute;
+            bottom: 25px;
+            right: 25px;
+            font-size: 1.2rem;
+            color: var(--text-secondary);
+            opacity: 0;
+            transform: translateX(-10px);
+            transition: var(--transition);
+        }
+
+        .tool-card:hover .arrow {
+            opacity: 1;
+            transform: translateX(0);
+        }
+
+        .footer {
+            text-align: center;
+            padding: 30px 0;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .footer .divider {
+            width: 60px;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--border), transparent);
+            margin: 0 auto 20px;
+        }
+
+        .footer .tip {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            background: rgba(255, 255, 255, 0.5);
+            border-radius: 8px;
+            border: 1px solid rgba(224, 213, 197, 0.3);
+        }
+
+        @media (max-width: 600px) {
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .header h1 .icon {
+                width: 50px;
+                height: 50px;
+                font-size: 1.5rem;
+            }
+
+            .tools-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .tool-card {
+                padding: 25px 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>
+                <span class="icon">📄</span>
+                PDF 工具集
+            </h1>
+            <div class="subtitle">
+                一站式PDF处理工具，包含裁剪、扫描效果、合并、水印去除等功能<br>
+                所有工具均可在浏览器中直接使用，无需安装任何软件
+            </div>
+        </div>
+
+        <div class="tools-grid">
+            <!-- PDF裁剪工具 -->
+            <a href="pdfkrop.html" class="tool-card">
+                <div class="icon-wrapper">✂️</div>
+                <h3>PDF裁剪工具</h3>
+                <div class="description">
+                    精确裁剪PDF页面，支持拖拽裁剪线、自定义边距设置
+                </div>
+                <div class="features">
+                    <span class="feature-tag">拖拽裁剪</span>
+                    <span class="feature-tag">自定义边距</span>
+                    <span class="feature-tag">实时预览</span>
+                </div>
+                <span class="arrow">→</span>
+            </a>
+
+            <!-- PDF扫描效果转换器 -->
+            <a href="PDF2Scan.html" class="tool-card">
+                <div class="icon-wrapper">🖨️</div>
+                <h3>PDF扫描效果转换器</h3>
+                <div class="description">
+                    将PDF转换为逼真的扫描效果，支持噪点、倾斜、暗角、背景纹理等
+                </div>
+                <div class="features">
+                    <span class="feature-tag">真实纹理</span>
+                    <span class="feature-tag">多种预设</span>
+                    <span class="feature-tag">背景自定义</span>
+                </div>
+                <span class="arrow">→</span>
+            </a>
+
+            <!-- PDF合并工具 -->
+            <a href="mergepdf_g.html" class="tool-card">
+                <div class="icon-wrapper">🔗</div>
+                <h3>PDF合并工具</h3>
+                <div class="description">
+                    将多个PDF页面合并为一个长页面，支持纵向、横向排列
+                </div>
+                <div class="features">
+                    <span class="feature-tag">多页合并</span>
+                    <span class="feature-tag">灵活排列</span>
+                    <span class="feature-tag">自定义画板</span>
+                </div>
+                <span class="arrow">→</span>
+            </a>
+
+            <!-- PDF水印去除工具 -->
+            <a href="pdfmarkremove.html" class="tool-card">
+                <div class="icon-wrapper">🧹</div>
+                <h3>PDF水印去除工具</h3>
+                <div class="description">
+                    智能识别并去除PDF中的水印、Logo等元素
+                </div>
+                <div class="features">
+                    <span class="feature-tag">智能识别</span>
+                    <span class="feature-tag">批量处理</span>
+                    <span class="feature-tag">精准去除</span>
+                </div>
+                <span class="arrow">→</span>
+            </a>
+        </div>
+
+        <div class="footer">
+            <div class="divider"></div>
+            <div class="tip">
+                💡 提示：所有工具均支持拖拽上传文件，快捷键操作
+            </div>
+        </div>
+    </div>
+</body>
+</html>
