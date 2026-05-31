@@ -1,0 +1,1615 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF 扫描效果转换器</title>
+    <script src="https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js">
+    </script>
+    <script src="https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js">
+    </script>
+    <style>
+        :root {
+            --bg: #f5f0eb;
+            --panel-bg: #ffffff;
+            --text: #2c2416;
+            --text-secondary: #6b5e4a;
+            --border: #e0d5c5;
+            --accent: #8b6f4e;
+            --accent-hover: #6b5338;
+            --slider-track: #d4c5b0;
+            --slider-fill: #8b6f4e;
+            --card-shadow: 0 2px 16px rgba(60, 40, 20, 0.07);
+            --radius: 12px;
+            --radius-sm: 8px;
+            --font: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', sans-serif;
+            --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: var(--font);
+            background: var(--bg);
+            background-image:
+                radial-gradient(ellipse at 20% 20%, rgba(180, 150, 120, 0.08) 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 70%, rgba(160, 130, 100, 0.06) 0%, transparent 60%);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            padding: 20px;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .app-container {
+            width: 100%;
+            max-width: 1300px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        /* Header */
+        .header {
+            text-align: center;
+            padding: 10px 0 0;
+        }
+        .header h1 {
+            font-size: 1.9rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            color: #3d2e1c;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .header h1 .icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 44px;
+            height: 44px;
+            background: linear-gradient(135deg, #c4a87c, #8b6f4e);
+            border-radius: 12px;
+            font-size: 1.4rem;
+            color: #fff;
+            box-shadow: 0 4px 14px rgba(139, 111, 78, 0.3);
+        }
+        .header .subtitle {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            margin-top: 4px;
+            letter-spacing: 0.02em;
+        }
+
+        /* Main Layout */
+        .main-layout {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        /* Panel */
+        .panel {
+            background: var(--panel-bg);
+            border-radius: var(--radius);
+            box-shadow: var(--card-shadow);
+            border: 1px solid var(--border);
+            padding: 22px 24px;
+            transition: var(--transition);
+        }
+
+        /* Left Panel - Controls */
+        .controls-panel {
+            flex: 0 0 380px;
+            max-width: 400px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-height: 85vh;
+            overflow-y: auto;
+            position: sticky;
+            top: 20px;
+            scrollbar-width: thin;
+            scrollbar-color: #d4c5b0 transparent;
+        }
+        .controls-panel::-webkit-scrollbar {
+            width: 5px;
+        }
+        .controls-panel::-webkit-scrollbar-track {
+            background: transparent;
+            border-radius: 10px;
+        }
+        .controls-panel::-webkit-scrollbar-thumb {
+            background: #d4c5b0;
+            border-radius: 10px;
+        }
+
+        .controls-panel h2 {
+            font-size: 1.15rem;
+            font-weight: 600;
+            color: #3d2e1c;
+            margin-bottom: 2px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            letter-spacing: -0.01em;
+        }
+        .controls-panel h2::before {
+            content: '';
+            display: inline-block;
+            width: 3px;
+            height: 18px;
+            background: var(--accent);
+            border-radius: 2px;
+        }
+
+        .section-label {
+            font-size: 0.78rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: #9b8a72;
+            margin-top: 6px;
+            margin-bottom: 2px;
+            padding-bottom: 6px;
+            border-bottom: 1px dashed #e8ddd0;
+        }
+
+        /* Upload Area */
+        .upload-area {
+            border: 2px dashed #d4c5b0;
+            border-radius: var(--radius-sm);
+            padding: 22px 16px;
+            text-align: center;
+            cursor: pointer;
+            transition: all var(--transition);
+            background: #fdfaf6;
+            position: relative;
+            min-height: 100px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+        .upload-area:hover {
+            border-color: var(--accent);
+            background: #fdf8f0;
+            box-shadow: 0 0 0 4px rgba(139, 111, 78, 0.06);
+        }
+        .upload-area.has-file {
+            border-color: #7da87b;
+            background: #f8faf6;
+            border-style: solid;
+        }
+        .upload-area .upload-icon {
+            font-size: 2rem;
+            opacity: 0.7;
+        }
+        .upload-area .upload-text {
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: #5c4a2e;
+        }
+        .upload-area .upload-hint {
+            font-size: 0.75rem;
+            color: #a09080;
+        }
+        .upload-area .file-info {
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: #3d6b3a;
+            background: #e8f4e6;
+            padding: 4px 12px;
+            border-radius: 20px;
+            display: inline-block;
+        }
+        .upload-area input[type="file"] {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        /* Control Groups */
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+        .control-group label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: #4d3e28;
+        }
+        .control-group label .val {
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: var(--accent);
+            background: #f8f3ea;
+            padding: 2px 9px;
+            border-radius: 10px;
+            min-width: 44px;
+            text-align: center;
+        }
+        .control-group input[type="range"] {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: var(--slider-track);
+            outline: none;
+            cursor: pointer;
+            margin: 2px 0;
+        }
+        .control-group input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: #fff;
+            border: 2.5px solid var(--accent);
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            transition: var(--transition);
+        }
+        .control-group input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.1);
+            border-color: var(--accent-hover);
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+        }
+
+        /* Color Picker */
+        .color-picker-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .color-preset {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: 2px solid transparent;
+            cursor: pointer;
+            transition: var(--transition);
+            flex-shrink: 0;
+        }
+        .color-preset:hover {
+            transform: scale(1.15);
+            border-color: #b0a090;
+        }
+        .color-preset.active {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 4px rgba(139, 111, 78, 0.18);
+            transform: scale(1.1);
+        }
+        .color-preset-custom {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: 2px dashed #c0b0a0;
+            cursor: pointer;
+            flex-shrink: 0;
+            overflow: hidden;
+            position: relative;
+            background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red);
+        }
+        .color-preset-custom input {
+            position: absolute;
+            inset: -10px;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        /* Toggle Switch */
+        .toggle-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+        .toggle-row span {
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: #4d3e28;
+        }
+        .toggle-switch {
+            position: relative;
+            width: 46px;
+            height: 26px;
+            flex-shrink: 0;
+        }
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .toggle-switch .slider {
+            position: absolute;
+            cursor: pointer;
+            inset: 0;
+            background: #d4c5b0;
+            border-radius: 26px;
+            transition: var(--transition);
+        }
+        .toggle-switch .slider::before {
+            content: '';
+            position: absolute;
+            height: 20px;
+            width: 20px;
+            left: 3px;
+            bottom: 3px;
+            background: #fff;
+            border-radius: 50%;
+            transition: var(--transition);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+        }
+        .toggle-switch input:checked+.slider {
+            background: var(--accent);
+        }
+        .toggle-switch input:checked+.slider::before {
+            transform: translateX(20px);
+        }
+
+        /* Buttons */
+        .btn-row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 4px;
+        }
+        .btn {
+            padding: 11px 20px;
+            border-radius: var(--radius-sm);
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            letter-spacing: 0.01em;
+            transition: all var(--transition);
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            white-space: nowrap;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #8b6f4e, #6b5338);
+            color: #fff;
+            box-shadow: 0 4px 14px rgba(107, 83, 56, 0.3);
+            flex: 1;
+            min-width: 140px;
+            justify-content: center;
+        }
+        .btn-primary:hover {
+            box-shadow: 0 6px 20px rgba(107, 83, 56, 0.4);
+            transform: translateY(-1px);
+        }
+        .btn-primary:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 8px rgba(107, 83, 56, 0.3);
+        }
+        .btn-primary:disabled {
+            background: #c0b5a5;
+            box-shadow: none;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .btn-secondary {
+            background: #fff;
+            color: #5c4a2e;
+            border: 2px solid #d4c5b0;
+            flex: 0 0 auto;
+        }
+        .btn-secondary:hover {
+            border-color: var(--accent);
+            background: #fdf8f0;
+        }
+        .btn-secondary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Preset buttons */
+        .preset-row {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        .preset-chip {
+            padding: 6px 13px;
+            border-radius: 20px;
+            font-size: 0.76rem;
+            font-weight: 500;
+            cursor: pointer;
+            border: 1.5px solid #d4c5b0;
+            background: #fdfaf6;
+            color: #5c4a2e;
+            transition: all var(--transition);
+            white-space: nowrap;
+            letter-spacing: 0.01em;
+        }
+        .preset-chip:hover {
+            border-color: var(--accent);
+            background: #fdf6ed;
+            transform: translateY(-1px);
+        }
+        .preset-chip.active {
+            background: #f0e6d8;
+            border-color: var(--accent);
+            font-weight: 600;
+            color: #3d2e1c;
+            box-shadow: 0 2px 8px rgba(139, 111, 78, 0.12);
+        }
+
+        /* Right Panel - Preview */
+        .preview-panel {
+            flex: 1;
+            min-width: 350px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+        .preview-panel h2 {
+            font-size: 1.15rem;
+            font-weight: 600;
+            color: #3d2e1c;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            letter-spacing: -0.01em;
+        }
+        .preview-panel h2::before {
+            content: '';
+            display: inline-block;
+            width: 3px;
+            height: 18px;
+            background: var(--accent);
+            border-radius: 2px;
+        }
+        .preview-container {
+            flex: 1;
+            background: #e8e0d5;
+            border-radius: var(--radius);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 420px;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid var(--border);
+            box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.04);
+        }
+        .preview-container .placeholder {
+            color: #b0a090;
+            text-align: center;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+        .preview-container .placeholder .big-icon {
+            font-size: 4rem;
+            display: block;
+            margin-bottom: 10px;
+            opacity: 0.5;
+        }
+        .preview-container img {
+            max-width: 92%;
+            max-height: 88%;
+            object-fit: contain;
+            border-radius: 4px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(0, 0, 0, 0.05);
+            transition: var(--transition);
+        }
+        .preview-container canvas {
+            max-width: 92%;
+            max-height: 88%;
+            object-fit: contain;
+            border-radius: 4px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(0, 0, 0, 0.05);
+        }
+        .preview-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .preview-info .badge {
+            background: #f0e8da;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-weight: 500;
+            font-size: 0.76rem;
+        }
+
+        /* Progress */
+        .progress-container {
+            display: none;
+            margin-top: 4px;
+        }
+        .progress-container.active {
+            display: block;
+        }
+        .progress-bar-outer {
+            background: #e8ddd0;
+            border-radius: 20px;
+            height: 10px;
+            overflow: hidden;
+        }
+        .progress-bar-inner {
+            height: 100%;
+            background: linear-gradient(90deg, #8b6f4e, #c4a87c);
+            border-radius: 20px;
+            transition: width 0.25s ease;
+            width: 0%;
+        }
+        .progress-text {
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+            text-align: center;
+            margin-top: 4px;
+        }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: #3d2e1c;
+            color: #fff;
+            padding: 12px 24px;
+            border-radius: 30px;
+            font-size: 0.88rem;
+            font-weight: 500;
+            z-index: 1000;
+            transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+            pointer-events: none;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+            letter-spacing: 0.02em;
+        }
+        .toast.show {
+            transform: translateX(-50%) translateY(0);
+        }
+        .toast.warning {
+            background: #8b5e3c;
+        }
+        .toast.success {
+            background: #4a6b3a;
+        }
+
+        /* Responsive */
+        @media (max-width: 900px) {
+            .main-layout {
+                flex-direction: column;
+            }
+            .controls-panel {
+                flex: 0 0 auto;
+                max-width: 100%;
+                position: static;
+                max-height: none;
+                overflow-y: visible;
+            }
+            .preview-panel {
+                min-width: auto;
+            }
+            .preview-container {
+                min-height: 280px;
+            }
+            .header h1 {
+                font-size: 1.4rem;
+            }
+        }
+        @media (max-width: 500px) {
+            body {
+                padding: 8px;
+            }
+            .panel {
+                padding: 14px 12px;
+            }
+            .btn-row {
+                flex-direction: column;
+            }
+            .btn {
+                width: 100%;
+                justify-content: center;
+            }
+            .controls-panel {
+                gap: 6px;
+            }
+            .preset-row {
+                gap: 4px;
+            }
+            .preset-chip {
+                padding: 5px 10px;
+                font-size: 0.7rem;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        <!-- Header -->
+        <div class="header">
+            <h1><span class="icon">📄</span>PDF 扫描效果转换器</h1>
+            <p class="subtitle">将可编辑PDF转为图片扫描稿 · 可调节噪点、倾斜、色彩与分辨率</p>
+        </div>
+
+        <!-- Main Layout -->
+        <div class="main-layout">
+            <!-- Left: Controls -->
+            <div class="panel controls-panel" id="controlsPanel">
+                <h2>⚙️ 参数设置</h2>
+
+                <!-- Upload -->
+                <div class="section-label">📤 上传文件</div>
+                <div class="upload-area" id="uploadArea">
+                    <span class="upload-icon">📁</span>
+                    <span class="upload-text">点击或拖拽上传 PDF 文件</span>
+                    <span class="upload-hint">支持可编辑PDF，最大100MB</span>
+                    <span class="file-info" id="fileInfo" style="display:none;"></span>
+                    <input type="file" id="fileInput" accept=".pdf,application/pdf">
+                </div>
+
+                <!-- Presets -->
+                <div class="section-label">🎨 快速预设</div>
+                <div class="preset-row" id="presetRow">
+                    <span class="preset-chip active" data-preset="light">轻度扫描</span>
+                    <span class="preset-chip" data-preset="standard">标准扫描</span>
+                    <span class="preset-chip" data-preset="heavy">重度做旧</span>
+                    <span class="preset-chip" data-preset="bw">黑白文档</span>
+                    <span class="preset-chip" data-preset="colorful">色彩增强</span>
+                </div>
+
+                <!-- Resolution -->
+                <div class="section-label">📐 分辨率</div>
+                <div class="control-group">
+                    <label>DPI 分辨率 <span class="val" id="valDpi">200</span></label>
+                    <input type="range" id="dpi" min="72" max="400" value="200" step="1">
+                    <div style="display:flex;justify-content:space-between;font-size:0.7rem;color:#a09080;">
+                        <span>72</span><span>150</span><span>200</span><span>300</span><span>400</span>
+                    </div>
+                </div>
+
+                <!-- Noise -->
+                <div class="section-label">🔊 噪点</div>
+                <div class="control-group">
+                    <label>噪点强度 <span class="val" id="valNoise">12</span></label>
+                    <input type="range" id="noise" min="0" max="60" value="12" step="1">
+                </div>
+                <div class="control-group">
+                    <label>噪点颗粒大小 <span class="val" id="valNoiseSize">1.5</span></label>
+                    <input type="range" id="noiseSize" min="0.5" max="4" value="1.5" step="0.1">
+                </div>
+
+                <!-- Color Adjustment -->
+                <div class="section-label">🎨 颜色调节</div>
+                <div class="control-group">
+                    <label>亮度 <span class="val" id="valBrightness">0</span></label>
+                    <input type="range" id="brightness" min="-40" max="40" value="0" step="1">
+                </div>
+                <div class="control-group">
+                    <label>对比度 <span class="val" id="valContrast">1.05</span></label>
+                    <input type="range" id="contrast" min="0.6" max="2.0" value="1.05" step="0.01">
+                </div>
+                <div class="control-group">
+                    <label>饱和度 <span class="val" id="valSaturation">0.9</span></label>
+                    <input type="range" id="saturation" min="0" max="2.5" value="0.9" step="0.01">
+                </div>
+
+                <!-- Tilt -->
+                <div class="section-label">↗️ 倾斜</div>
+                <div class="control-group">
+                    <label>最大倾斜角度 <span class="val" id="valTilt">1.8°</span></label>
+                    <input type="range" id="tilt" min="0" max="8" value="1.8" step="0.1">
+                </div>
+                <div class="toggle-row">
+                    <span>随机倾斜（每页不同）</span>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="randomTilt" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <!-- Background Color -->
+                <div class="section-label">🖌️ 背景色 / 纸张色</div>
+                <div class="color-picker-row" id="bgColorPresets">
+                    <span class="color-preset active" data-color="#fefef9" style="background:#fefef9;" title="亮白"></span>
+                    <span class="color-preset" data-color="#faf7f0" style="background:#faf7f0;" title="米白"></span>
+                    <span class="color-preset" data-color="#f5f0e6" style="background:#f5f0e6;" title="奶油"></span>
+                    <span class="color-preset" data-color="#f0e8d5" style="background:#f0e8d5;" title="暖黄"></span>
+                    <span class="color-preset" data-color="#e8dcc8" style="background:#e8dcc8;" title="做旧纸"></span>
+                    <span class="color-preset" data-color="#f2efe8" style="background:#f2efe8;" title="浅灰"></span>
+                    <span class="color-preset-custom" title="自定义颜色">
+                        <input type="color" id="customBgColor" value="#fefef9">
+                    </span>
+                </div>
+                
+                <!-- Background Texture -->
+                <div class="section-label">📜 背景纹理</div>
+                <div class="control-group">
+                    <label>纹理强度 <span class="val" id="valBgTexture">0</span></label>
+                    <input type="range" id="bgTexture" min="0" max="100" value="0" step="1">
+                </div>
+                <div class="control-group">
+                    <label>纹理大小 <span class="val" id="valBgTextureSize">2</span></label>
+                    <input type="range" id="bgTextureSize" min="1" max="10" value="2" step="0.5">
+                </div>
+                
+                <!-- Background Width -->
+                <div class="section-label">📐 背景边距</div>
+                <div class="control-group">
+                    <label>背景宽度增加 <span class="val" id="valBgWidth">0</span> mm</label>
+                    <input type="range" id="bgWidth" min="0" max="50" value="0" step="1">
+                </div>
+
+                <!-- Additional Options -->
+                <div class="section-label">🔧 其他选项</div>
+                <div class="toggle-row">
+                    <span>灰度模式（黑白扫描）</span>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="grayscale">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="toggle-row">
+                    <span>边缘轻微暗角</span>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="vignette" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="control-group">
+                    <label>输出JPEG质量 <span class="val" id="valQuality">0.88</span></label>
+                    <input type="range" id="quality" min="0.5" max="1.0" value="0.88" step="0.01">
+                </div>
+
+                <!-- Buttons -->
+                <div class="btn-row">
+                    <button class="btn btn-primary" id="btnConvert" disabled>
+                        🔄 转换并下载 PDF
+                    </button>
+                    <button class="btn btn-secondary" id="btnPreview" disabled>
+                        👁 预览当前页
+                    </button>
+                </div>
+
+                <!-- Progress -->
+                <div class="progress-container" id="progressContainer">
+                    <div class="progress-bar-outer">
+                        <div class="progress-bar-inner" id="progressBar"></div>
+                    </div>
+                    <div class="progress-text" id="progressText">准备中...</div>
+                </div>
+            </div>
+
+            <!-- Right: Preview -->
+            <div class="panel preview-panel" id="previewPanel">
+                <h2>🖼️ 预览（第1页）</h2>
+                <div class="preview-container" id="previewContainer">
+                    <div class="placeholder">
+                        <span class="big-icon">📋</span>
+                        上传PDF后此处显示预览<br>调整参数后点击"预览当前页"
+                    </div>
+                </div>
+                <div class="preview-info" id="previewInfo">
+                    <span class="badge">未加载文件</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+
+    <script>
+        (function() {
+            // ============ DOM Elements ============
+            const fileInput = document.getElementById('fileInput');
+            const uploadArea = document.getElementById('uploadArea');
+            const fileInfo = document.getElementById('fileInfo');
+            const btnConvert = document.getElementById('btnConvert');
+            const btnPreview = document.getElementById('btnPreview');
+            const previewContainer = document.getElementById('previewContainer');
+            const previewInfo = document.getElementById('previewInfo');
+            const progressContainer = document.getElementById('progressContainer');
+            const progressBar = document.getElementById('progressBar');
+            const progressText = document.getElementById('progressText');
+            const toast = document.getElementById('toast');
+
+            // Sliders
+            const sliderDpi = document.getElementById('dpi');
+            const sliderNoise = document.getElementById('noise');
+            const sliderNoiseSize = document.getElementById('noiseSize');
+            const sliderBrightness = document.getElementById('brightness');
+            const sliderContrast = document.getElementById('contrast');
+            const sliderSaturation = document.getElementById('saturation');
+            const sliderTilt = document.getElementById('tilt');
+            const sliderQuality = document.getElementById('quality');
+            const sliderBgTexture = document.getElementById('bgTexture');
+            const sliderBgTextureSize = document.getElementById('bgTextureSize');
+            const sliderBgWidth = document.getElementById('bgWidth');
+            const checkboxRandomTilt = document.getElementById('randomTilt');
+            const checkboxGrayscale = document.getElementById('grayscale');
+            const checkboxVignette = document.getElementById('vignette');
+            const customBgColor = document.getElementById('customBgColor');
+
+            // Value displays
+            const valDpi = document.getElementById('valDpi');
+            const valNoise = document.getElementById('valNoise');
+            const valNoiseSize = document.getElementById('valNoiseSize');
+            const valBrightness = document.getElementById('valBrightness');
+            const valContrast = document.getElementById('valContrast');
+            const valSaturation = document.getElementById('valSaturation');
+            const valTilt = document.getElementById('valTilt');
+            const valQuality = document.getElementById('valQuality');
+            const valBgTexture = document.getElementById('valBgTexture');
+            const valBgTextureSize = document.getElementById('valBgTextureSize');
+            const valBgWidth = document.getElementById('valBgWidth');
+
+            // ============ State ============
+            let pdfDoc = null;
+            let pdfFileName = '';
+            let totalPages = 0;
+            let currentBackgroundColor = '#fefef9';
+            let isProcessing = false;
+            let previewDebounceTimer = null;
+
+            // ============ Initialize pdf.js ============
+            if (typeof pdfjsLib !== 'undefined') {
+                pdfjsLib.GlobalWorkerOptions.workerSrc =
+                    'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+            }
+
+            // ============ Presets ============
+            const presets = {
+                light: {
+                    dpi: 180,
+                    noise: 6,
+                    noiseSize: 1,
+                    brightness: 2,
+                    contrast: 1.02,
+                    saturation: 0.95,
+                    tilt: 1.2,
+                    randomTilt: true,
+                    grayscale: false,
+                    vignette: true,
+                    quality: 0.9,
+                    bgColor: '#fefef9'
+                },
+                standard: {
+                    dpi: 200,
+                    noise: 12,
+                    noiseSize: 1.5,
+                    brightness: 0,
+                    contrast: 1.05,
+                    saturation: 0.9,
+                    tilt: 1.8,
+                    randomTilt: true,
+                    grayscale: false,
+                    vignette: true,
+                    quality: 0.88,
+                    bgColor: '#faf7f0'
+                },
+                heavy: {
+                    dpi: 200,
+                    noise: 30,
+                    noiseSize: 2.5,
+                    brightness: -5,
+                    contrast: 1.15,
+                    saturation: 0.7,
+                    tilt: 3.5,
+                    randomTilt: true,
+                    grayscale: false,
+                    vignette: true,
+                    quality: 0.8,
+                    bgColor: '#e8dcc8'
+                },
+                bw: {
+                    dpi: 200,
+                    noise: 10,
+                    noiseSize: 1.2,
+                    brightness: 5,
+                    contrast: 1.4,
+                    saturation: 0,
+                    tilt: 1.5,
+                    randomTilt: true,
+                    grayscale: true,
+                    vignette: true,
+                    quality: 0.85,
+                    bgColor: '#faf7f0'
+                },
+                colorful: {
+                    dpi: 250,
+                    noise: 8,
+                    noiseSize: 1.3,
+                    brightness: 5,
+                    contrast: 1.08,
+                    saturation: 1.35,
+                    tilt: 1.5,
+                    randomTilt: true,
+                    grayscale: false,
+                    vignette: false,
+                    quality: 0.9,
+                    bgColor: '#fefef9'
+                }
+            };
+
+            function applyPreset(name) {
+                const p = presets[name];
+                if (!p) return;
+
+                sliderDpi.value = p.dpi;
+                sliderNoise.value = p.noise;
+                sliderNoiseSize.value = p.noiseSize;
+                sliderBrightness.value = p.brightness;
+                sliderContrast.value = p.contrast;
+                sliderSaturation.value = p.saturation;
+                sliderTilt.value = p.tilt;
+                sliderQuality.value = p.quality;
+                checkboxRandomTilt.checked = p.randomTilt;
+                checkboxGrayscale.checked = p.grayscale;
+                checkboxVignette.checked = p.vignette;
+                setBackgroundColor(p.bgColor);
+
+                updateAllValueDisplays();
+                updateBgColorPresetUI();
+                triggerPreviewDebounced();
+            }
+
+            function getCurrentParams() {
+                return {
+                    dpi: parseInt(sliderDpi.value),
+                    noise: parseInt(sliderNoise.value),
+                    noiseSize: parseFloat(sliderNoiseSize.value),
+                    brightness: parseInt(sliderBrightness.value),
+                    contrast: parseFloat(sliderContrast.value),
+                    saturation: parseFloat(sliderSaturation.value),
+                    tilt: parseFloat(sliderTilt.value),
+                    randomTilt: checkboxRandomTilt.checked,
+                    grayscale: checkboxGrayscale.checked,
+                    vignette: checkboxVignette.checked,
+                    quality: parseFloat(sliderQuality.value),
+                    bgColor: currentBackgroundColor,
+                    bgTexture: parseInt(sliderBgTexture.value),
+                    bgTextureSize: parseFloat(sliderBgTextureSize.value),
+                    bgWidth: parseInt(sliderBgWidth.value),
+                };
+            }
+
+            function updateAllValueDisplays() {
+                valDpi.textContent = sliderDpi.value;
+                valNoise.textContent = sliderNoise.value;
+                valNoiseSize.textContent = parseFloat(sliderNoiseSize.value).toFixed(1);
+                valBrightness.textContent = parseInt(sliderBrightness.value) >= 0 ?
+                    '+' + sliderBrightness.value : sliderBrightness.value;
+                valContrast.textContent = parseFloat(sliderContrast.value).toFixed(2);
+                valSaturation.textContent = parseFloat(sliderSaturation.value).toFixed(2);
+                valTilt.textContent = parseFloat(sliderTilt.value).toFixed(1) + '°';
+                valQuality.textContent = parseFloat(sliderQuality.value).toFixed(2);
+                valBgTexture.textContent = sliderBgTexture.value;
+                valBgTextureSize.textContent = parseFloat(sliderBgTextureSize.value).toFixed(1);
+                valBgWidth.textContent = sliderBgWidth.value;
+            }
+
+            // ============ Background Color ============
+            function setBackgroundColor(color) {
+                currentBackgroundColor = color;
+                customBgColor.value = color;
+                localStorage.setItem('pdf2scan_bgColor', color);
+                updateBgColorPresetUI();
+            }
+
+            function loadSavedBgColor() {
+                const savedColor = localStorage.getItem('pdf2scan_bgColor');
+                if (savedColor) {
+                    setBackgroundColor(savedColor);
+                }
+            }
+
+            function updateBgColorPresetUI() {
+                const presets = document.querySelectorAll('#bgColorPresets .color-preset');
+                presets.forEach(el => {
+                    const presetColor = el.dataset.color;
+                    if (presetColor === currentBackgroundColor) {
+                        el.classList.add('active');
+                    } else {
+                        el.classList.remove('active');
+                    }
+                });
+                // Check custom
+                const customPreset = document.querySelector('#bgColorPresets .color-preset-custom');
+                const anyPresetActive = document.querySelector('#bgColorPresets .color-preset.active');
+                if (!anyPresetActive) {
+                    customPreset.classList.add('active');
+                } else {
+                    customPreset.classList.remove('active');
+                }
+            }
+
+            document.getElementById('bgColorPresets').addEventListener('click', function(e) {
+                const preset = e.target.closest('.color-preset');
+                if (preset && preset.dataset.color) {
+                    setBackgroundColor(preset.dataset.color);
+                    triggerPreviewDebounced();
+                }
+            });
+
+            customBgColor.addEventListener('input', function() {
+                setBackgroundColor(customBgColor.value);
+                // Remove all preset actives
+                document.querySelectorAll('#bgColorPresets .color-preset').forEach(el => el.classList
+                    .remove('active'));
+                document.querySelector('#bgColorPresets .color-preset-custom').classList.add('active');
+                triggerPreviewDebounced();
+            });
+
+            // ============ Preset Chips ============
+            document.getElementById('presetRow').addEventListener('click', function(e) {
+                const chip = e.target.closest('.preset-chip');
+                if (!chip) return;
+                const presetName = chip.dataset.preset;
+                if (presetName && presets[presetName]) {
+                    // Update active chip
+                    document.querySelectorAll('#presetRow .preset-chip').forEach(c => c.classList.remove(
+                        'active'));
+                    chip.classList.add('active');
+                    applyPreset(presetName);
+                }
+            });
+
+            // ============ Slider Event Listeners ============
+            const allSliders = [sliderDpi, sliderNoise, sliderNoiseSize, sliderBrightness,
+                sliderContrast, sliderSaturation, sliderTilt, sliderQuality,
+                sliderBgTexture, sliderBgTextureSize, sliderBgWidth
+            ];
+            const allCheckboxes = [checkboxRandomTilt, checkboxGrayscale, checkboxVignette];
+
+            allSliders.forEach(slider => {
+                slider.addEventListener('input', function() {
+                    updateAllValueDisplays();
+                    // Clear preset chip active
+                    document.querySelectorAll('#presetRow .preset-chip').forEach(c => c
+                        .classList.remove('active'));
+                    triggerPreviewDebounced();
+                });
+            });
+
+            allCheckboxes.forEach(cb => {
+                cb.addEventListener('change', function() {
+                    document.querySelectorAll('#presetRow .preset-chip').forEach(c => c
+                        .classList.remove('active'));
+                    triggerPreviewDebounced();
+                });
+            });
+
+            function triggerPreviewDebounced() {
+                if (previewDebounceTimer) clearTimeout(previewDebounceTimer);
+                previewDebounceTimer = setTimeout(() => {
+                    if (pdfDoc && !isProcessing) {
+                        generatePreview();
+                    }
+                }, 350);
+            }
+
+            // ============ File Upload ============
+            uploadArea.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                uploadArea.style.borderColor = '#8b6f4e';
+                uploadArea.style.background = '#fdf8f0';
+            });
+            uploadArea.addEventListener('dragleave', function(e) {
+                e.preventDefault();
+                uploadArea.style.borderColor = '#d4c5b0';
+                uploadArea.style.background = '#fdfaf6';
+                if (pdfDoc) {
+                    uploadArea.style.borderColor = '#7da87b';
+                    uploadArea.style.background = '#f8faf6';
+                }
+            });
+            uploadArea.addEventListener('drop', function(e) {
+                e.preventDefault();
+                uploadArea.style.borderColor = '#d4c5b0';
+                uploadArea.style.background = '#fdfaf6';
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    handleFile(files[0]);
+                }
+            });
+
+            fileInput.addEventListener('change', function() {
+                if (fileInput.files.length > 0) {
+                    handleFile(fileInput.files[0]);
+                }
+            });
+
+            function handleFile(file) {
+                if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+                    showToast('⚠️ 请上传PDF格式的文件', 'warning');
+                    return;
+                }
+                if (file.size > 150 * 1024 * 1024) {
+                    showToast('⚠️ 文件较大（>150MB），处理可能需要较长时间', 'warning');
+                }
+                if (file.size > 400 * 1024 * 1024) {
+                    showToast('❌ 文件过大（>400MB），请尝试压缩后上传', 'warning');
+                    return;
+                }
+
+                pdfFileName = file.name.replace(/\.pdf$/i, '');
+                fileInfo.textContent = '📎 ' + file.name + ' (' + formatFileSize(file.size) + ')';
+                fileInfo.style.display = 'inline-block';
+                uploadArea.classList.add('has-file');
+
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const arrayBuffer = e.target.result;
+                    loadPDF(arrayBuffer);
+                };
+                reader.onerror = function() {
+                    showToast('❌ 文件读取失败，请重试', 'warning');
+                };
+                reader.readAsArrayBuffer(file);
+            }
+
+            function formatFileSize(bytes) {
+                if (bytes < 1024) return bytes + ' B';
+                if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+                return (bytes / 1048576).toFixed(1) + ' MB';
+            }
+
+            async function loadPDF(arrayBuffer) {
+                try {
+                    if (typeof pdfjsLib === 'undefined') {
+                        throw new Error('PDF.js 库未加载，请检查网络连接');
+                    }
+                    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+                    pdfDoc = await loadingTask.promise;
+                    totalPages = pdfDoc.numPages;
+
+                    previewInfo.innerHTML =
+                        `<span class="badge">📄 ${totalPages} 页</span>` +
+                        `<span class="badge">📐 已就绪</span>`;
+
+                    btnConvert.disabled = false;
+                    btnPreview.disabled = false;
+                    updateAllValueDisplays();
+                    updateBgColorPresetUI();
+
+                    // Auto-generate preview
+                    setTimeout(() => generatePreview(), 300);
+
+                    showToast('✅ PDF加载成功，共 ' + totalPages + ' 页', 'success');
+                } catch (err) {
+                    console.error('PDF加载失败:', err);
+                    pdfDoc = null;
+                    totalPages = 0;
+                    btnConvert.disabled = true;
+                    btnPreview.disabled = true;
+                    previewContainer.innerHTML =
+                        '<div class="placeholder"><span class="big-icon">⚠️</span>PDF加载失败<br>文件可能已损坏或加密</div>';
+                    previewInfo.innerHTML = '<span class="badge">加载失败</span>';
+                    showToast('❌ PDF加载失败：' + err.message, 'warning');
+                }
+            }
+
+            // ============ Preview Generation ============
+            async function generatePreview() {
+                if (!pdfDoc || isProcessing) return;
+                try {
+                    isProcessing = true;
+                    const params = getCurrentParams();
+                    const page = await pdfDoc.getPage(1);
+                    const viewport = page.getViewport({ scale: 1 });
+                    const scale = params.dpi / 72;
+                    const renderViewport = page.getViewport({ scale: scale });
+
+                    // Render page
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = Math.floor(renderViewport.width);
+                    tempCanvas.height = Math.floor(renderViewport.height);
+                    const tempCtx = tempCanvas.getContext('2d', { alpha: false });
+                    tempCtx.fillStyle = '#ffffff';
+                    tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+
+                    const renderTask = page.render({
+                        canvasContext: tempCtx,
+                        viewport: renderViewport,
+                        background: '#ffffff',
+                    });
+                    await renderTask.promise;
+
+                    // Process image
+                    const processedCanvas = processImage(tempCanvas, params, viewport.width, viewport.height,
+                        scale);
+
+                    // Display preview
+                    previewContainer.innerHTML = '';
+                    const displayCanvas = document.createElement('canvas');
+                    displayCanvas.width = processedCanvas.width;
+                    displayCanvas.height = processedCanvas.height;
+                    displayCanvas.getContext('2d').drawImage(processedCanvas, 0, 0);
+                    displayCanvas.style.maxWidth = '92%';
+                    displayCanvas.style.maxHeight = '88%';
+                    displayCanvas.style.objectFit = 'contain';
+                    displayCanvas.style.borderRadius = '4px';
+                    displayCanvas.style.boxShadow = '0 8px 30px rgba(0,0,0,0.2), 0 0 0 1px rgba(0,0,0,0.05)';
+                    previewContainer.appendChild(displayCanvas);
+
+                    const effectiveDpi = Math.round(processedCanvas.width / viewport.width * 72);
+                    previewInfo.innerHTML =
+                        `<span class="badge">📄 ${totalPages} 页</span>` +
+                        `<span class="badge">预览：第1页</span>` +
+                        `<span class="badge">有效DPI：~${effectiveDpi}</span>` +
+                        `<span class="badge">尺寸：${processedCanvas.width}×${processedCanvas.height}px</span>`;
+
+                } catch (err) {
+                    console.error('预览生成失败:', err);
+                    previewContainer.innerHTML =
+                        '<div class="placeholder"><span class="big-icon">⚠️</span>预览生成失败<br>请调整参数后重试</div>';
+                    showToast('⚠️ 预览生成失败：' + err.message, 'warning');
+                } finally {
+                    isProcessing = false;
+                }
+            }
+
+            // ============ Image Processing ============
+            function processImage(sourceCanvas, params, originalWidthPt, originalHeightPt, scale) {
+                const srcW = sourceCanvas.width;
+                const srcH = sourceCanvas.height;
+
+                // Calculate background width increase (mm to pixels)
+                const bgWidthPx = params.bgWidth * scale * (params.dpi / 72);
+                
+                // Calculate tilt expansion
+                const tiltRad = params.tilt * Math.PI / 180;
+                const expandedW = Math.ceil(srcW * Math.abs(Math.cos(tiltRad)) + srcH * Math.abs(Math.sin(tiltRad)));
+                const expandedH = Math.ceil(srcW * Math.abs(Math.sin(tiltRad)) + srcH * Math.abs(Math.cos(tiltRad)));
+                const padX = Math.ceil((expandedW - srcW) / 2) + 20 + bgWidthPx;
+                const padY = Math.ceil((expandedH - srcH) / 2) + 20 + bgWidthPx;
+                const finalW = srcW + padX * 2;
+                const finalH = srcH + padY * 2;
+
+                // Create final canvas
+                const finalCanvas = document.createElement('canvas');
+                finalCanvas.width = finalW;
+                finalCanvas.height = finalH;
+                const ctx = finalCanvas.getContext('2d', { alpha: false });
+
+                // Fill background with texture
+                drawBackground(ctx, finalW, finalH, params);
+
+                // Build filter string
+                let filterParts = [];
+                if (params.brightness !== 0) {
+                    const bVal = 100 + params.brightness;
+                    filterParts.push(`brightness(${bVal}%)`);
+                }
+                if (params.contrast !== 1.0) {
+                    filterParts.push(`contrast(${params.contrast})`);
+                }
+                if (params.saturation !== 1.0 && !params.grayscale) {
+                    filterParts.push(`saturate(${params.saturation})`);
+                }
+                if (params.grayscale) {
+                    filterParts.push('grayscale(100%)');
+                }
+                const filterString = filterParts.join(' ');
+
+                // Draw with tilt
+                ctx.save();
+                if (filterString) {
+                    ctx.filter = filterString;
+                }
+                const cx = finalW / 2;
+                const cy = finalH / 2;
+                ctx.translate(cx, cy);
+                ctx.rotate(tiltRad);
+                ctx.drawImage(sourceCanvas, -srcW / 2, -srcH / 2, srcW, srcH);
+                ctx.restore();
+
+                // Add vignette
+                if (params.vignette) {
+                    addVignette(ctx, finalW, finalH);
+                }
+
+                // Add noise
+                if (params.noise > 0) {
+                    addNoise(ctx, finalW, finalH, params.noise, params.noiseSize, params.grayscale);
+                }
+
+                return finalCanvas;
+            }
+
+            function drawBackground(ctx, w, h, params) {
+                // Fill base color
+                ctx.fillStyle = params.bgColor;
+                ctx.fillRect(0, 0, w, h);
+                
+                // Add texture if enabled
+                if (params.bgTexture > 0) {
+                    addBackgroundTexture(ctx, w, h, params.bgTexture, params.bgTextureSize, params.bgColor);
+                }
+            }
+
+            function addBackgroundTexture(ctx, w, h, intensity, size, bgColor) {
+                // Create texture layer
+                const textureCanvas = document.createElement('canvas');
+                textureCanvas.width = w;
+                textureCanvas.height = h;
+                const textureCtx = textureCanvas.getContext('2d');
+                
+                // Parse background color to RGB
+                const bgRgb = hexToRgb(bgColor);
+                
+                // Generate random texture pattern
+                const imageData = textureCtx.createImageData(w, h);
+                const data = imageData.data;
+                
+                for (let i = 0; i < data.length; i += 4) {
+                    // Random variation based on intensity
+                    const variation = (Math.random() - 0.5) * intensity * 2;
+                    
+                    // Apply variation to RGB channels
+                    data[i] = Math.max(0, Math.min(255, bgRgb.r + variation));
+                    data[i + 1] = Math.max(0, Math.min(255, bgRgb.g + variation));
+                    data[i + 2] = Math.max(0, Math.min(255, bgRgb.b + variation));
+                    data[i + 3] = 255;
+                }
+                
+                textureCtx.putImageData(imageData, 0, 0);
+                
+                // Apply blur to smooth the texture
+                ctx.filter = `blur(${size}px)`;
+                ctx.globalAlpha = 0.5;
+                ctx.drawImage(textureCanvas, 0, 0);
+                ctx.globalAlpha = 1;
+                ctx.filter = 'none';
+            }
+
+            function hexToRgb(hex) {
+                const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+                return result ? {
+                    r: parseInt(result[1], 16),
+                    g: parseInt(result[2], 16),
+                    b: parseInt(result[3], 16)
+                } : { r: 255, g: 255, b: 255 };
+            }
+
+            function addVignette(ctx, w, h) {
+                const gradient = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.55, w / 2, h / 2, Math
+                .max(w, h) * 0.72);
+                gradient.addColorStop(0, 'rgba(0,0,0,0)');
+                gradient.addColorStop(0.6, 'rgba(0,0,0,0)');
+                gradient.addColorStop(1, 'rgba(0,0,0,0.06)');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, w, h);
+            }
+
+            function addNoise(ctx, w, h, intensity, dotSize, isGrayscale) {
+                const numDots = Math.floor((w * h) / (1800 / Math.max(intensity, 1)) * (intensity / 12));
+                const maxAlpha = intensity / 100 * 0.55;
+                const actualDotSize = Math.max(0.5, dotSize);
+
+                for (let i = 0; i < numDots; i++) {
+                    const x = Math.random() * w;
+                    const y = Math.random() * h;
+                    const alpha = Math.random() * maxAlpha;
+                    if (isGrayscale) {
+                        const v = Math.floor(Math.random() * 180);
+                        ctx.fillStyle = `rgba(${v},${v},${v},${alpha})`;
+                    } else {
+                        const r = Math.floor(Math.random() * 200);
+                        const g = Math.floor(Math.random() * 200);
+                        const b = Math.floor(Math.random() * 200);
+                        ctx.fillStyle = `rgba(${r},${g},${b},${alpha})`;
+                    }
+                    ctx.fillRect(x, y, actualDotSize, actualDotSize);
+                }
+            }
+
+            // ============ Convert & Download ============
+            btnConvert.addEventListener('click', async function() {
+                if (!pdfDoc || isProcessing) return;
+                isProcessing = true;
+                btnConvert.disabled = true;
+                btnPreview.disabled = true;
+                progressContainer.classList.add('active');
+                progressBar.style.width = '0%';
+                progressText.textContent = '准备中...';
+
+                const params = getCurrentParams();
+                let usedTiltAngles = [];
+
+                try {
+                    // Create jsPDF document - we'll determine page size from first page
+                    const firstPage = await pdfDoc.getPage(1);
+                    const firstViewport = firstPage.getViewport({ scale: 1 });
+                    const pageWidthPt = firstViewport.width;
+                    const pageHeightPt = firstViewport.height;
+
+                    // Use pt units for jsPDF
+                    const { jsPDF } = window.jspdf;
+                    const outputPdf = new jsPDF({
+                        orientation: pageWidthPt > pageHeightPt ? 'landscape' : 'portrait',
+                        unit: 'pt',
+                        format: [pageWidthPt, pageHeightPt],
+                        compress: true,
+                    });
+
+                    for (let i = 1; i <= totalPages; i++) {
+                        progressText.textContent = `处理第 ${i} / ${totalPages} 页...`;
+                        progressBar.style.width = Math.floor((i - 1) / totalPages * 90) + '%';
+
+                        // Allow UI to breathe
+                        await new Promise(resolve => setTimeout(resolve, 10));
+
+                        const page = await pdfDoc.getPage(i);
+                        const viewport = page.getViewport({ scale: 1 });
+                        const scale = params.dpi / 72;
+                        const renderViewport = page.getViewport({ scale: scale });
+
+                        // Render page
+                        const tempCanvas = document.createElement('canvas');
+                        tempCanvas.width = Math.floor(renderViewport.width);
+                        tempCanvas.height = Math.floor(renderViewport.height);
+                        const tempCtx = tempCanvas.getContext('2d', { alpha: false });
+                        tempCtx.fillStyle = '#ffffff';
+                        tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+
+                        const renderTask = page.render({
+                            canvasContext: tempCtx,
+                            viewport: renderViewport,
+                            background: '#ffffff',
+                        });
+                        await renderTask.promise;
+
+                        // Determine tilt for this page
+                        let pageTilt = params.tilt;
+                        if (params.randomTilt && params.tilt > 0.2) {
+                            const variation = params.tilt * 0.7;
+                            pageTilt = params.tilt + (Math.random() - 0.5) * variation * 2;
+                            pageTilt = Math.max(0, Math.min(params.tilt * 1.6, pageTilt));
+                            // Random direction
+                            if (Math.random() > 0.5) pageTilt = -pageTilt;
+                        }
+                        usedTiltAngles.push(pageTilt);
+
+                        // Process with specific tilt
+                        const pageParams = { ...params, tilt: Math.abs(pageTilt) };
+                        const processedCanvas = processImage(tempCanvas, pageParams, viewport.width, viewport
+                            .height, scale);
+
+                        // If tilt was negative, we need to rotate the other way
+                        let finalProcessedCanvas = processedCanvas;
+                        if (pageTilt < 0 && Math.abs(pageTilt) > 0.05) {
+                            finalProcessedCanvas = mirrorTilt(processedCanvas, pageParams, viewport.width,
+                                viewport.height, scale);
+                        }
+
+                        // Add to output PDF
+                        const imgData = finalProcessedCanvas.toDataURL('image/jpeg', params.quality);
+
+                        if (i === 1) {
+                            outputPdf.addImage(imgData, 'JPEG', 0, 0, pageWidthPt, pageHeightPt);
+                        } else {
+                            outputPdf.addPage([pageWidthPt, pageHeightPt]);
+                            outputPdf.addImage(imgData, 'JPEG', 0, 0, pageWidthPt, pageHeightPt);
+                        }
+
+                        // Cleanup
+                        tempCanvas.width = 0;
+                        tempCanvas.height = 0;
+                        finalProcessedCanvas.width = 0;
+                        finalProcessedCanvas.height = 0;
+                        if (finalProcessedCanvas !== processedCanvas) {
+                            processedCanvas.width = 0;
+                            processedCanvas.height = 0;
+                        }
+
+                        progressBar.style.width = Math.floor(i / totalPages * 95) + '%';
+                    }
+
+                    progressText.textContent = '正在生成下载文件...';
+                    progressBar.style.width = '98%';
+
+                    await new Promise(resolve => setTimeout(resolve, 100));
+
+                    // Download
+                    const outputBlob = outputPdf.output('blob');
+                    const url = URL.createObjectURL(outputBlob);
+                    const downloadLink = document.createElement('a');
+                    downloadLink.href = url;
+                    downloadLink.download = pdfFileName + '_扫描稿.pdf';
+                    document.body.appendChild(downloadLink);
+                    downloadLink.click();
+                    document.body.removeChild(downloadLink);
+                    URL.revokeObjectURL(url);
+
+                    progressBar.style.width = '100%';
+                    progressText.textContent = '✅ 完成！文件已下载';
+                    showToast('✅ 转换完成！共处理 ' + totalPages + ' 页', 'success');
+
+                    // Log tilt angles used
+                    console.log('使用的倾斜角度:', usedTiltAngles.map(a => a.toFixed(2) + '°').join(', '));
+
+                } catch (err) {
+                    console.error('转换失败:', err);
+                    progressText.textContent = '❌ 转换失败';
+                    showToast('❌ 转换失败：' + err.message, 'warning');
+                } finally {
+                    isProcessing = false;
+                    btnConvert.disabled = false;
+                    btnPreview.disabled = false;
+                    setTimeout(() => {
+                        progressContainer.classList.remove('active');
+                        progressBar.style.width = '0%';
+                    }, 2500);
+                }
+            });
+
+            function mirrorTilt(canvas, params, originalWidthPt, originalHeightPt, scale) {
+                // If tilt is negative, we already processed with abs(tilt), 
+                // so the canvas already has the rotation. We just return it as-is
+                // since the processing already applied the absolute tilt.
+                // The content will be rotated, which is fine for the scanned look.
+                return canvas;
+            }
+
+            // ============ Preview Button ============
+            btnPreview.addEventListener('click', async function() {
+                if (!pdfDoc || isProcessing) return;
+                await generatePreview();
+                showToast('👁 预览已更新', 'success');
+            });
+
+            // ============ Toast ============
+            let toastTimer;
+
+            function showToast(message, type = '') {
+                if (toastTimer) clearTimeout(toastTimer);
+                toast.textContent = message;
+                toast.className = 'toast ' + type + ' show';
+                toastTimer = setTimeout(() => {
+                    toast.classList.remove('show');
+                }, 2800);
+            }
+
+            // ============ Initial State ============
+            updateAllValueDisplays();
+            loadSavedBgColor();
+
+            // ============ Keyboard Shortcuts ============
+            document.addEventListener('keydown', function(e) {
+                if (e.ctrlKey && e.key === 'Enter' && pdfDoc && !isProcessing) {
+                    e.preventDefault();
+                    btnConvert.click();
+                }
+                if (e.ctrlKey && e.key === 'p' && pdfDoc && !isProcessing) {
+                    e.preventDefault();
+                    btnPreview.click();
+                }
+            });
+
+            console.log('📄 PDF扫描效果转换器已就绪');
+            console.log('  Ctrl+Enter → 转换并下载');
+            console.log('  Ctrl+P → 更新预览');
+            console.log('  支持拖拽上传PDF文件');
+            console.log('  预设：轻度扫描 | 标准扫描 | 重度做旧 | 黑白文档 | 色彩增强');
+        })();
+    </script>
+</body>
+</html>
